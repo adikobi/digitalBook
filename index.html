@@ -179,13 +179,23 @@
             100% { opacity: 0; transform: translate(-50%, -20px); }
         }
 
+        /* Edit Button Animation */
+        .edit-btn {
+            transition: all 0.3s ease;
+            opacity: 0.6;
+        }
+        .face:hover .edit-btn {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
     </style>
 </head>
 <body class="text-slate-800">
 
     <div class="mb-8 text-center px-4 relative z-10">
         <h1 class="text-4xl font-bold text-blue-900 mb-2">האלבום הדיגיטלי שלי</h1>
-        <p class="text-slate-500">העלה תמונות, שמור את הספר וקבל קוד לשיתוף</p>
+        <p class="text-slate-500">העלה תמונות, דפדף וצור את הספר שלך</p>
     </div>
 
     <!-- Spinner Overlay for Loading -->
@@ -288,8 +298,7 @@
         import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // כאן הגדרת את המפתחות שלך - מצוין!
-        // שיניתי את שם המשתנה ל-manualConfig כדי שיתאים לבדיקה בהמשך הקוד
+        // הגדרות Firebase
         const manualConfig = {
             apiKey: "AIzaSyAaTX0PaOjyW7UaAyHRp2BxOJU1Ke62Kno",
             authDomain: "digitalbook-d0eac.firebaseapp.com",
@@ -307,16 +316,13 @@
         try {
             let configToUse;
             
-            // בדיקה אם יש הגדרות אוטומטיות (בסביבת הפיתוח - המערכת שלנו)
             if (typeof __firebase_config !== 'undefined') {
                 configToUse = JSON.parse(__firebase_config);
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             } 
-            // אחרת, נשתמש בהגדרות הידניות שהכנסת (עבור GitHub Pages)
-            // השורה הזו בודקת אם יש מפתח, ואם הוא לא "YOUR_API_KEY" (כלומר, אם עדכנת אותו - ועדכנת!)
             else if (manualConfig.apiKey && manualConfig.apiKey !== "YOUR_API_KEY") {
                 configToUse = manualConfig;
-                appId = 'my-digital-book'; // מזהה קבוע לגרסה האישית שלך
+                appId = 'my-digital-book'; 
             }
 
             if (configToUse) {
@@ -351,7 +357,6 @@
 
             updateUIForOfflineMode() {
                 if (!isCloudAvailable) {
-                    // Disable cloud buttons visually if offline
                     const saveBtn = document.getElementById('saveBtn');
                     const loadBtn = document.getElementById('loadBtn');
                     
@@ -389,7 +394,6 @@
                     }
                 } catch (error) {
                     console.error("Auth error:", error);
-                    // Fallback to render if auth fails
                     this.render();
                 }
             }
@@ -442,6 +446,40 @@
                 });
             }
 
+            // --- עריכה והחלפת תמונה ---
+            triggerImageReplacement(index) {
+                // יצירת אינפוט קובץ נסתר
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.onchange = (e) => this.handleReplacement(e.target, index);
+                input.click();
+            }
+
+            async handleReplacement(input, index) {
+                if (input.files && input.files[0]) {
+                    this.showLoading(true, "מחליף תמונה...");
+                    const file = input.files[0];
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        // עדכון המערך
+                        this.images[index] = e.target.result;
+                        // רינדור מחדש
+                        this.render();
+                        this.showLoading(false);
+                        
+                        // הודעה למשתמש
+                        const toast = document.createElement('div');
+                        toast.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-800 text-white px-4 py-2 rounded-full shadow-lg z-[100] text-sm fade-in-out';
+                        toast.innerText = 'התמונה הוחלפה בהצלחה! (אל תשכח לשמור)';
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 3000);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+            // ---------------------------
+
             async saveBook() {
                 if (!isCloudAvailable) {
                     alert("תכונת השמירה דורשת הגדרת Firebase. אנא ערוך את הקובץ והוסף את פרטי הפרויקט שלך.");
@@ -461,14 +499,12 @@
                 this.showLoading(true, "דוחס תמונות ושומר כל דף בנפרד...");
 
                 try {
-                    // 1. Compress all images first
                     const compressPromises = this.images.map(img => this.compressImage(img));
                     const compressedImages = await Promise.all(compressPromises);
 
                     const bookId = crypto.randomUUID();
                     const pageIds = [];
 
-                    // 2. Save each image as a separate document
                     const savePagePromises = compressedImages.map(async (imgData, index) => {
                         const pageId = crypto.randomUUID();
                         pageIds[index] = pageId; 
@@ -485,7 +521,6 @@
 
                     await Promise.all(savePagePromises);
 
-                    // 3. Save the main book metadata
                     const bookData = {
                         pageIds: pageIds,
                         createdAt: new Date().toISOString(),
@@ -496,7 +531,6 @@
                     const bookRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', bookId);
                     await setDoc(bookRef, bookData);
 
-                    // 4. Update UI - Show only the ID
                     document.getElementById('shareLinkInput').value = bookId;
                     document.getElementById('shareModal').classList.remove('hidden');
 
@@ -508,7 +542,6 @@
                 }
             }
 
-            // New function for manual loading
             async promptLoadBook() {
                 if (!isCloudAvailable) {
                     alert("טעינת ספרים דורשת הגדרת Firebase. אנא ערוך את הקובץ והוסף את פרטי הפרויקט שלך.");
@@ -557,7 +590,6 @@
 
                         this.render();
                         
-                        // Auto open first page
                          setTimeout(() => {
                                 if (this.currentPage === 0) this.nextPage();
                         }, 500);
@@ -636,13 +668,11 @@
             render() {
                 this.bookElement.innerHTML = '';
                 
-                // 1. כריכה קדמית
                 const coverLeaf = this.createLeaf(0, 'cover');
                 this.addContentToFace(coverLeaf.querySelector('.front'), 'cover-front');
                 this.addContentToFace(coverLeaf.querySelector('.back'), 'inner-cover'); 
                 this.bookElement.appendChild(coverLeaf);
 
-                // 2. דפים פנימיים
                 const totalImages = this.images.length;
                 let imageIndex = 0; 
                 let leafIndex = 1;
@@ -662,7 +692,6 @@
                     leafIndex++;
                 }
 
-                // 3. כריכה אחורית
                 const backCoverLeaf = this.createLeaf(leafIndex, 'cover back-cover');
                 this.addContentToFace(backCoverLeaf.querySelector('.front'), 'empty');
                 this.addContentToFace(backCoverLeaf.querySelector('.back'), 'cover-back');
@@ -688,9 +717,10 @@
                 };
 
                 const front = document.createElement('div');
-                front.className = 'face front';
+                // הוספת class group כדי לאפשר hover על הכפתור
+                front.className = 'face front group'; 
                 const back = document.createElement('div');
-                back.className = 'face back';
+                back.className = 'face back group';
 
                 leaf.appendChild(front);
                 leaf.appendChild(back);
@@ -727,6 +757,21 @@
                         pageNum.className = 'absolute bottom-2 left-1/2 transform -translate-x-1/2 text-gray-400 text-xs';
                         pageNum.innerText = imageIndex + 1;
                         faceElement.appendChild(pageNum);
+
+                        // --- כפתור עריכה ---
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'edit-btn absolute top-3 right-3 bg-white/90 text-gray-700 w-8 h-8 rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-blue-50 hover:text-blue-600';
+                        editBtn.innerHTML = '<i class="fas fa-pencil-alt text-sm"></i>';
+                        editBtn.title = "החלף תמונה";
+                        
+                        // מונע מהלחיצה לדפדף בספר
+                        editBtn.onclick = (e) => {
+                            e.stopPropagation(); 
+                            this.triggerImageReplacement(imageIndex);
+                        };
+                        
+                        faceElement.appendChild(editBtn);
+                        // -------------------
                     }
                 } else {
                     faceElement.innerHTML = '<div class="empty-state">דף ריק</div>';
