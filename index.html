@@ -185,7 +185,7 @@
 
     <div class="mb-8 text-center px-4 relative z-10">
         <h1 class="text-4xl font-bold text-blue-900 mb-2">האלבום הדיגיטלי שלי</h1>
-        <p class="text-slate-500">העלה תמונות, דפדף וצור את הספר שלך</p>
+        <p class="text-slate-500">העלה תמונות, שמור את הספר וקבל קוד לשיתוף</p>
     </div>
 
     <!-- Spinner Overlay for Loading -->
@@ -288,15 +288,15 @@
         import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-
-
-        const firebaseConfig = {
-        apiKey: "AIzaSyAaTX0PaOjyW7UaAyHRp2BxOJU1Ke62Kno",
-        authDomain: "digitalbook-d0eac.firebaseapp.com",
-        projectId: "digitalbook-d0eac",
-        storageBucket: "digitalbook-d0eac.firebasestorage.app",
-        messagingSenderId: "981124340550",
-        appId: "1:981124340550:web:c23dd2c6e49f9f1a2aa347"
+        // כאן הגדרת את המפתחות שלך - מצוין!
+        // שיניתי את שם המשתנה ל-manualConfig כדי שיתאים לבדיקה בהמשך הקוד
+        const manualConfig = {
+            apiKey: "AIzaSyAaTX0PaOjyW7UaAyHRp2BxOJU1Ke62Kno",
+            authDomain: "digitalbook-d0eac.firebaseapp.com",
+            projectId: "digitalbook-d0eac",
+            storageBucket: "digitalbook-d0eac.firebasestorage.app",
+            messagingSenderId: "981124340550",
+            appId: "1:981124340550:web:c23dd2c6e49f9f1a2aa347"
         };
 
         // Global vars for firebase
@@ -307,12 +307,13 @@
         try {
             let configToUse;
             
-            // בדיקה אם יש הגדרות אוטומטיות (בסביבת הפיתוח)
+            // בדיקה אם יש הגדרות אוטומטיות (בסביבת הפיתוח - המערכת שלנו)
             if (typeof __firebase_config !== 'undefined') {
                 configToUse = JSON.parse(__firebase_config);
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             } 
-            // אחרת, נסה להשתמש בהגדרות הידניות
+            // אחרת, נשתמש בהגדרות הידניות שהכנסת (עבור GitHub Pages)
+            // השורה הזו בודקת אם יש מפתח, ואם הוא לא "YOUR_API_KEY" (כלומר, אם עדכנת אותו - ועדכנת!)
             else if (manualConfig.apiKey && manualConfig.apiKey !== "YOUR_API_KEY") {
                 configToUse = manualConfig;
                 appId = 'my-digital-book'; // מזהה קבוע לגרסה האישית שלך
