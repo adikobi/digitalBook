@@ -288,18 +288,40 @@
         import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // Global vars for firebase (initialized safely)
+
+
+        const firebaseConfig = {
+        apiKey: "AIzaSyAaTX0PaOjyW7UaAyHRp2BxOJU1Ke62Kno",
+        authDomain: "digitalbook-d0eac.firebaseapp.com",
+        projectId: "digitalbook-d0eac",
+        storageBucket: "digitalbook-d0eac.firebasestorage.app",
+        messagingSenderId: "981124340550",
+        appId: "1:981124340550:web:c23dd2c6e49f9f1a2aa347"
+        };
+
+        // Global vars for firebase
         let app, auth, db, appId;
         let isCloudAvailable = false;
 
         // Try to initialize Firebase safely
         try {
-            if (typeof __firebase_config !== 'undefined' && typeof __app_id !== 'undefined') {
-                const firebaseConfig = JSON.parse(__firebase_config);
-                app = initializeApp(firebaseConfig);
+            let configToUse;
+            
+            // בדיקה אם יש הגדרות אוטומטיות (בסביבת הפיתוח)
+            if (typeof __firebase_config !== 'undefined') {
+                configToUse = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            } 
+            // אחרת, נסה להשתמש בהגדרות הידניות
+            else if (manualConfig.apiKey && manualConfig.apiKey !== "YOUR_API_KEY") {
+                configToUse = manualConfig;
+                appId = 'my-digital-book'; // מזהה קבוע לגרסה האישית שלך
+            }
+
+            if (configToUse) {
+                app = initializeApp(configToUse);
                 auth = getAuth(app);
                 db = getFirestore(app);
-                appId = __app_id;
                 isCloudAvailable = true;
             } else {
                 console.warn("Firebase configuration not found. Running in offline mode.");
@@ -334,11 +356,11 @@
                     
                     if(saveBtn) {
                         saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                        saveBtn.title = "אפשרות זו זמינה רק בחיבור לענן";
+                        saveBtn.title = "נדרשת הגדרת Firebase בקוד כדי להפעיל שמירה";
                     }
                     if(loadBtn) {
                         loadBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                        loadBtn.title = "אפשרות זו זמינה רק בחיבור לענן";
+                        loadBtn.title = "נדרשת הגדרת Firebase בקוד כדי להפעיל טעינה";
                     }
                 }
             }
@@ -421,7 +443,7 @@
 
             async saveBook() {
                 if (!isCloudAvailable) {
-                    alert("תכונת השמירה זמינה רק בסביבת הפיתוח או עם הגדרת מסד נתונים פרטי.");
+                    alert("תכונת השמירה דורשת הגדרת Firebase. אנא ערוך את הקובץ והוסף את פרטי הפרויקט שלך.");
                     return;
                 }
 
@@ -488,7 +510,7 @@
             // New function for manual loading
             async promptLoadBook() {
                 if (!isCloudAvailable) {
-                    alert("טעינת ספרים זמינה רק בסביבת הפיתוח או עם הגדרת מסד נתונים פרטי.");
+                    alert("טעינת ספרים דורשת הגדרת Firebase. אנא ערוך את הקובץ והוסף את פרטי הפרויקט שלך.");
                     return;
                 }
 
