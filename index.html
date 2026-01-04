@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הספר הדיגיטלי שלי</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: #f3f4f6;
+            overflow-x: hidden;
+            perspective: 1500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        /* --- מנוע הספר --- */
+        .scene {
+            width: 500px;
+            height: 500px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.5s ease;
+            margin: 40px auto;
+        }
+
+        @media (max-width: 600px) {
+            .scene {
+                width: 300px;
+                height: 300px;
+            }
+        }
+
+        .book {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.5s ease-in-out;
+        }
+
+        /* RTL Logic */
+        .book.open {
+            transform: translateX(-50%); 
+        }
+
+        .page {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: right center; 
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1);
+            cursor: pointer;
+        }
+
+        .face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .front {
+            z-index: 2;
+            box-shadow: inset -5px 0 15px rgba(0,0,0,0.1); 
+        }
+
+        .back {
+            transform: rotateY(-180deg); 
+            z-index: 1;
+            box-shadow: inset 5px 0 15px rgba(0,0,0,0.1); 
+        }
+
+        .cover .face {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white;
+            border: 2px solid #172554;
+        }
+        
+        .cover.back-cover .face {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        }
+
+        .page.flipped {
+            transform: rotateY(-180deg);
+        }
+
+        .page-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            padding: 10px;
+            background: white;
+        }
+
+        .empty-state {
+            color: #9ca3af;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .inner-paper {
+            background-color: #fdfbf7;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .upload-btn-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Modal Styles */
+        #shareModal {
+            backdrop-filter: blur(5px);
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Toast Animation */
+        .fade-in-out {
+            animation: fadeInOut 3s forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -20px); }
+            10% { opacity: 1; transform: translate(-50%, 0); }
+            90% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="mb-8 text-center px-4 relative z-10">
+        <h1 class="text-4xl font-bold text-blue-900 mb-2">האלבום הדיגיטלי שלי</h1>
+        <p class="text-slate-500">העלה תמונות, דפדף וצור את הספר שלך</p>
+    </div>
+
+    <!-- Spinner Overlay for Loading -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/80 z-[100] hidden flex-col items-center justify-center">
+        <div class="loader mb-4"></div>
+        <p class="text-blue-600 font-medium" id="loadingText">טוען...</p>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="shareModal" class="fixed inset-0 bg-black/50 z-[90] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full text-center">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-check text-green-600 text-2xl"></i>
+            </div>
+            <h3 class="text-2xl font-bold mb-2">הספר נשמר בענן!</h3>
+            <p class="text-gray-600 mb-2 font-medium">כדי לצפות בספר, שמור את הקוד הבא:</p>
+            <p class="text-xs text-gray-400 mb-4">(יש להזין קוד זה בכפתור "טען ספר" באתר)</p>
+            
+            <div class="flex gap-2 mb-6">
+                <input type="text" id="shareLinkInput" class="w-full bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-lg text-blue-800 font-mono font-bold text-center tracking-wider" readonly>
+                <button onclick="copyLink()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition shrink-0" title="העתק קוד">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+            
+            <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 text-sm font-medium">סגור חלון</button>
+        </div>
+    </div>
+
+    <!-- אזור הספר -->
+    <div class="scene">
+        <div class="book" id="book">
+            <!-- הדפים יווצרו כאן דינמית -->
+        </div>
+    </div>
+
+    <!-- לוח בקרה -->
+    <div class="controls bg-white p-4 rounded-xl shadow-lg border border-slate-200 w-full max-w-3xl mx-auto mt-12 mb-8">
+        
+        <!-- כפתורי דפדוף -->
+        <div class="flex gap-2 items-center order-2 md:order-1">
+            <button onclick="window.bookApp.nextPage()" class="w-12 h-12 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition" title="הבא (שמאלה)">
+                <i class="fas fa-arrow-left text-slate-600"></i>
+            </button>
+            <span id="page-indicator" class="font-mono text-sm px-3">כריכה</span>
+            <button onclick="window.bookApp.prevPage()" class="w-12 h-12 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition" title="הקודם (ימינה)">
+                <i class="fas fa-arrow-right text-slate-600"></i>
+            </button>
+        </div>
+
+        <!-- כפתורי פעולה -->
+        <div class="flex gap-3 items-center order-1 md:order-2 flex-grow justify-center md:justify-end flex-wrap">
+            <div class="upload-btn-wrapper">
+                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-md flex items-center gap-2 text-sm md:text-base">
+                    <i class="fas fa-images"></i> הוסף
+                </button>
+                <input type="file" id="imageInput" multiple accept="image/*" onchange="window.bookApp.handleUpload(this)">
+            </div>
+            
+            <button id="saveBtn" onclick="window.bookApp.saveBook()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-md flex items-center gap-2 text-sm md:text-base">
+                <i class="fas fa-cloud-upload-alt"></i> שמור
+            </button>
+
+            <!-- כפתור טעינה ידני -->
+            <button id="loadBtn" onclick="window.bookApp.promptLoadBook()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition shadow-md flex items-center gap-2 text-sm md:text-base">
+                <i class="fas fa-search"></i> טען ספר
+            </button>
+
+            <button onclick="window.bookApp.resetBook()" class="text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg transition text-sm border border-red-100" title="איפוס">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="text-center text-xs text-slate-400 pb-8">
+        טיפ: לחץ על צד שמאל כדי להתקדם, ועל צד ימין כדי לחזור
+    </div>
+
+    <!-- Modal helper functions -->
+    <script>
+        function copyLink() {
+            const copyText = document.getElementById("shareLinkInput");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999); 
+            document.execCommand('copy'); 
+            
+            const btn = document.querySelector('#shareModal button i.fa-copy');
+            btn.className = 'fas fa-check';
+            setTimeout(() => { btn.className = 'fas fa-copy'; }, 2000);
+        }
+
+        function closeModal() {
+            document.getElementById('shareModal').classList.add('hidden');
+        }
+    </script>
+
+    <!-- App Logic Module -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Global vars for firebase (initialized safely)
+        let app, auth, db, appId;
+        let isCloudAvailable = false;
+
+        // Try to initialize Firebase safely
+        try {
+            if (typeof __firebase_config !== 'undefined' && typeof __app_id !== 'undefined') {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                appId = __app_id;
+                isCloudAvailable = true;
+            } else {
+                console.warn("Firebase configuration not found. Running in offline mode.");
+            }
+        } catch (e) {
+            console.warn("Error initializing Firebase:", e);
+        }
+
+        class DigitalBook {
+            constructor() {
+                this.images = []; 
+                this.currentPage = 0; 
+                this.bookElement = document.getElementById('book');
+                this.indicatorElement = document.getElementById('page-indicator');
+                this.loadingOverlay = document.getElementById('loadingOverlay');
+                this.loadingText = document.getElementById('loadingText');
+                
+                this.defaultCover = {
+                    title: "האלבום שלי",
+                    subtitle: "לחץ כדי לפתוח"
+                };
+
+                this.initAuthAndApp();
+                this.updateUIForOfflineMode();
+            }
+
+            updateUIForOfflineMode() {
+                if (!isCloudAvailable) {
+                    // Disable cloud buttons visually if offline
+                    const saveBtn = document.getElementById('saveBtn');
+                    const loadBtn = document.getElementById('loadBtn');
+                    
+                    if(saveBtn) {
+                        saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                        saveBtn.title = "אפשרות זו זמינה רק בחיבור לענן";
+                    }
+                    if(loadBtn) {
+                        loadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                        loadBtn.title = "אפשרות זו זמינה רק בחיבור לענן";
+                    }
+                }
+            }
+
+            async initAuthAndApp() {
+                if (!isCloudAvailable) {
+                    this.render();
+                    return;
+                }
+
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const sharedBookId = urlParams.get('bookId');
+
+                    if (sharedBookId) {
+                        await this.loadBookFromCloud(sharedBookId);
+                    } else {
+                        this.render();
+                    }
+                } catch (error) {
+                    console.error("Auth error:", error);
+                    // Fallback to render if auth fails
+                    this.render();
+                }
+            }
+
+            showLoading(show, text = "") {
+                if (show) {
+                    this.loadingText.innerText = text;
+                    this.loadingOverlay.classList.remove('hidden');
+                    this.loadingOverlay.classList.add('flex');
+                } else {
+                    this.loadingOverlay.classList.add('hidden');
+                    this.loadingOverlay.classList.remove('flex');
+                }
+            }
+
+            // Image Compression Helper
+            async compressImage(base64Str) {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.src = base64Str;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 600;
+                        const MAX_HEIGHT = 600;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    };
+                    img.onerror = () => {
+                        console.warn("Failed to compress image, using original");
+                        resolve(base64Str);
+                    };
+                });
+            }
+
+            async saveBook() {
+                if (!isCloudAvailable) {
+                    alert("תכונת השמירה זמינה רק בסביבת הפיתוח או עם הגדרת מסד נתונים פרטי.");
+                    return;
+                }
+
+                if (this.images.length === 0) {
+                    alert("לא ניתן לשמור ספר ריק. אנא הוסף תמונות.");
+                    return;
+                }
+
+                if (!auth.currentUser) {
+                    alert("מתחבר לענן... אנא נסה שוב בעוד רגע.");
+                    return;
+                }
+
+                this.showLoading(true, "דוחס תמונות ושומר כל דף בנפרד...");
+
+                try {
+                    // 1. Compress all images first
+                    const compressPromises = this.images.map(img => this.compressImage(img));
+                    const compressedImages = await Promise.all(compressPromises);
+
+                    const bookId = crypto.randomUUID();
+                    const pageIds = [];
+
+                    // 2. Save each image as a separate document
+                    const savePagePromises = compressedImages.map(async (imgData, index) => {
+                        const pageId = crypto.randomUUID();
+                        pageIds[index] = pageId; 
+                        
+                        const pageData = {
+                            bookId: bookId,
+                            index: index,
+                            imageData: imgData
+                        };
+                        
+                        const pageRef = doc(db, 'artifacts', appId, 'public', 'data', 'book_pages', pageId);
+                        return setDoc(pageRef, pageData);
+                    });
+
+                    await Promise.all(savePagePromises);
+
+                    // 3. Save the main book metadata
+                    const bookData = {
+                        pageIds: pageIds,
+                        createdAt: new Date().toISOString(),
+                        authorId: auth.currentUser.uid,
+                        title: this.defaultCover.title
+                    };
+
+                    const bookRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', bookId);
+                    await setDoc(bookRef, bookData);
+
+                    // 4. Update UI - Show only the ID
+                    document.getElementById('shareLinkInput').value = bookId;
+                    document.getElementById('shareModal').classList.remove('hidden');
+
+                } catch (error) {
+                    console.error("Save error:", error);
+                    alert("שגיאה בשמירת הספר. נסה שוב.");
+                } finally {
+                    this.showLoading(false);
+                }
+            }
+
+            // New function for manual loading
+            async promptLoadBook() {
+                if (!isCloudAvailable) {
+                    alert("טעינת ספרים זמינה רק בסביבת הפיתוח או עם הגדרת מסד נתונים פרטי.");
+                    return;
+                }
+
+                const bookId = prompt("אנא הזן את קוד הספר (ID) שברצונך לטעון:");
+                if (bookId && bookId.trim().length > 0) {
+                    await this.loadBookFromCloud(bookId.trim());
+                }
+            }
+
+            async loadBookFromCloud(bookId) {
+                if (!isCloudAvailable) return;
+
+                this.showLoading(true, "טוען את הספר...");
+                try {
+                    const bookRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', bookId);
+                    const bookSnap = await getDoc(bookRef);
+
+                    if (bookSnap.exists()) {
+                        const data = bookSnap.data();
+                        this.defaultCover.title = data.title || "ספר משותף";
+                        this.defaultCover.subtitle = "נטען מהענן";
+
+                        if (data.images && Array.isArray(data.images)) {
+                            this.images = data.images;
+                        } else if (data.pageIds && Array.isArray(data.pageIds)) {
+                            this.showLoading(true, `טוען ${data.pageIds.length} עמודים...`);
+                            
+                            const pagePromises = data.pageIds.map(pageId => {
+                                const pageRef = doc(db, 'artifacts', appId, 'public', 'data', 'book_pages', pageId);
+                                return getDoc(pageRef).then(snap => {
+                                    if (snap.exists()) return { index: snap.data().index, data: snap.data().imageData };
+                                    return null;
+                                });
+                            });
+
+                            const pages = await Promise.all(pagePromises);
+                            
+                            this.images = pages
+                                .filter(p => p !== null)
+                                .sort((a, b) => a.index - b.index)
+                                .map(p => p.data);
+                        }
+
+                        this.render();
+                        
+                        // Auto open first page
+                         setTimeout(() => {
+                                if (this.currentPage === 0) this.nextPage();
+                        }, 500);
+
+                    } else {
+                        alert("הספר לא נמצא! אנא וודא שהקוד תקין.");
+                        this.render();
+                    }
+                } catch (error) {
+                    console.error("Load error:", error);
+                    alert("שגיאה בטעינת הספר. וודא שהקוד תקין.");
+                    this.render();
+                } finally {
+                    this.showLoading(false);
+                }
+            }
+
+            async handleUpload(input) {
+                if (!input.files || input.files.length === 0) return;
+
+                this.showLoading(true, "מעבד תמונות...");
+                
+                try {
+                    const filePromises = Array.from(input.files).map(file => {
+                        return new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = (e) => resolve(e.target.result);
+                            reader.onerror = (e) => {
+                                console.error("Error reading file:", file.name, e);
+                                resolve(null); 
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    });
+
+                    const newImages = await Promise.all(filePromises);
+                    const validImages = newImages.filter(img => img !== null);
+                    
+                    if (validImages.length > 0) {
+                        this.images = [...this.images, ...validImages];
+                        this.render();
+                        
+                        if (this.currentPage === 0) {
+                            setTimeout(() => {
+                                this.nextPage();
+                                const toast = document.createElement('div');
+                                toast.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full shadow-lg z-[100] text-sm fade-in-out';
+                                toast.innerText = `הוספו ${validImages.length} תמונות - הספר נפתח!`;
+                                document.body.appendChild(toast);
+                                setTimeout(() => toast.remove(), 3000);
+                            }, 300);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Upload error:", error);
+                    alert("אירעה שגיאה בעיבוד התמונות.");
+                } finally {
+                    this.showLoading(false);
+                    input.value = '';
+                }
+            }
+
+            resetBook() {
+                if(confirm('האם למחוק את כל התמונות ולהתחיל מחדש?')) {
+                    this.images = [];
+                    this.currentPage = 0;
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('bookId');
+                    window.history.pushState({}, '', url);
+                    
+                    this.defaultCover = { title: "האלבום שלי", subtitle: "לחץ כדי לפתוח" };
+                    this.render();
+                }
+            }
+
+            render() {
+                this.bookElement.innerHTML = '';
+                
+                // 1. כריכה קדמית
+                const coverLeaf = this.createLeaf(0, 'cover');
+                this.addContentToFace(coverLeaf.querySelector('.front'), 'cover-front');
+                this.addContentToFace(coverLeaf.querySelector('.back'), 'inner-cover'); 
+                this.bookElement.appendChild(coverLeaf);
+
+                // 2. דפים פנימיים
+                const totalImages = this.images.length;
+                let imageIndex = 0; 
+                let leafIndex = 1;
+
+                while (imageIndex < totalImages) {
+                    const leaf = this.createLeaf(leafIndex, '');
+                    this.addContentToFace(leaf.querySelector('.front'), 'image', imageIndex);
+                    
+                    if (imageIndex + 1 < totalImages) {
+                        this.addContentToFace(leaf.querySelector('.back'), 'image', imageIndex + 1);
+                    } else {
+                        this.addContentToFace(leaf.querySelector('.back'), 'empty');
+                    }
+
+                    this.bookElement.appendChild(leaf);
+                    imageIndex += 2;
+                    leafIndex++;
+                }
+
+                // 3. כריכה אחורית
+                const backCoverLeaf = this.createLeaf(leafIndex, 'cover back-cover');
+                this.addContentToFace(backCoverLeaf.querySelector('.front'), 'empty');
+                this.addContentToFace(backCoverLeaf.querySelector('.back'), 'cover-back');
+                this.bookElement.appendChild(backCoverLeaf);
+
+                this.totalPages = leafIndex;
+                if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+                this.updateBookState();
+            }
+
+            createLeaf(index, className) {
+                const leaf = document.createElement('div');
+                leaf.className = `page ${className}`;
+                leaf.style.zIndex = this.totalPages - index; 
+                leaf.dataset.index = index;
+                
+                leaf.onclick = () => {
+                    if (this.currentPage === index) {
+                        this.nextPage();
+                    } else if (this.currentPage === index + 1) {
+                        this.prevPage();
+                    }
+                };
+
+                const front = document.createElement('div');
+                front.className = 'face front';
+                const back = document.createElement('div');
+                back.className = 'face back';
+
+                leaf.appendChild(front);
+                leaf.appendChild(back);
+                return leaf;
+            }
+
+            addContentToFace(faceElement, type, imageIndex) {
+                if (type === 'cover-front') {
+                    faceElement.innerHTML = `
+                        <div class="text-center p-8 border-4 border-yellow-500/30 h-full w-full flex flex-col justify-center items-center">
+                            <i class="fas fa-book-open text-6xl mb-4 text-yellow-400"></i>
+                            <h2 class="text-3xl font-bold mb-2">${this.defaultCover.title}</h2>
+                            <p class="opacity-80">${this.defaultCover.subtitle}</p>
+                            <p class="mt-8 text-sm opacity-60">נוצרו ${this.images.length} דפים</p>
+                        </div>
+                    `;
+                } else if (type === 'cover-back') {
+                     faceElement.innerHTML = `
+                        <div class="text-center">
+                            <h2 class="text-xl font-bold">סוף הספר</h2>
+                            <div class="mt-4 text-2xl">📚</div>
+                        </div>
+                    `;
+                } else if (type === 'inner-cover') {
+                    faceElement.innerHTML = '<div class="inner-paper"></div>';
+                } else if (type === 'image') {
+                    if (this.images[imageIndex]) {
+                        const img = document.createElement('img');
+                        img.src = this.images[imageIndex];
+                        img.className = 'page-image';
+                        faceElement.appendChild(img);
+                        
+                        const pageNum = document.createElement('div');
+                        pageNum.className = 'absolute bottom-2 left-1/2 transform -translate-x-1/2 text-gray-400 text-xs';
+                        pageNum.innerText = imageIndex + 1;
+                        faceElement.appendChild(pageNum);
+                    }
+                } else {
+                    faceElement.innerHTML = '<div class="empty-state">דף ריק</div>';
+                }
+            }
+
+            nextPage() {
+                if (this.currentPage <= this.totalPages) {
+                    this.currentPage++;
+                    this.updateBookState();
+                }
+            }
+
+            prevPage() {
+                if (this.currentPage > 0) {
+                    this.currentPage--;
+                    this.updateBookState();
+                }
+            }
+
+            updateBookState() {
+                const leaves = document.querySelectorAll('.page');
+                
+                if (this.currentPage === 0) {
+                    this.bookElement.classList.remove('open');
+                    this.indicatorElement.innerText = "כריכה קדמית";
+                } else if (this.currentPage > this.totalPages) {
+                    this.bookElement.classList.remove('open');
+                    this.indicatorElement.innerText = "כריכה אחורית";
+                } else {
+                    this.bookElement.classList.add('open');
+                    this.indicatorElement.innerText = `מבט: ${this.currentPage}`;
+                }
+
+                leaves.forEach((leaf, index) => {
+                    const leafIndex = parseInt(leaf.dataset.index);
+
+                    if (leafIndex < this.currentPage) {
+                        leaf.classList.add('flipped');
+                        leaf.style.zIndex = leafIndex; 
+                    } else {
+                        leaf.classList.remove('flipped');
+                        leaf.style.zIndex = this.totalPages - leafIndex;
+                    }
+                });
+            }
+        }
+
+        // Expose to window for HTML buttons
+        window.bookApp = new DigitalBook();
+    </script>
+</body>
+</html>
